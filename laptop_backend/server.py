@@ -36,12 +36,17 @@ MODELS_DIR = Path(r"E:\3D\models")
 CACHE_DIR = Path(r"E:\3D\RealityScanCache")
 PROJECT_FILE = Path(r"E:\3D\RealityScanProject\AutoScan.rsc")
 
+from datetime import datetime
+
 # Internal session state
 class ScanSessionState:
     expected_photos: int = 0
     received_photos: int = 0
     is_scanning: bool = False
     realityscan_running: bool = False
+    session_id: str = "default"
+    photos_dir: Path = PHOTOS_DIR
+    models_dir: Path = MODELS_DIR
 
 session_state = ScanSessionState()
 
@@ -75,21 +80,20 @@ def run_realityscan_pipeline():
         session_state.realityscan_running = False
         return
 
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    obj_path = str(MODELS_DIR / "texturedMesh.obj")
+    session_state.models_dir.mkdir(parents=True, exist_ok=True)
+    obj_path = str(session_state.models_dir / "texturedMesh.obj")
 
     cmd = [
         str(REALITYSCAN_EXE),
         "-newScene",
         "-addFolder",
-        str(PHOTOS_DIR),
+        str(session_state.photos_dir),
         "-align",
         "-calculateNormalModel",
         "-calculateTexture",
         "-exportModel",
         "Model 1",
-        obj_path,
-        "-quit",
+        obj_path
     ]
 
     logger.info(f"Launching RealityScan 2.2 CLI:\n{' '.join(cmd)}")
@@ -119,13 +123,19 @@ async def session_start(req: StartSessionRequest):
     """
     logger.info(f"[SESSION START] Starting scan session for {req.expected_photos} photos.")
     
-    # 1. Clear unchangeable directories
-    clean_directory(PHOTOS_DIR)
-    clean_directory(MODELS_DIR)
+    # 1. Create timestamped unique scan session folders so all previous images & models are kept forever!
+    session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_state.session_id = session_id
+    session_state.photos_dir = PHOTOS_DIR / f"scan_{session_id}"
+    session_state.models_dir = MODELS_DIR / f"scan_{session_id}"
+    session_state.photos_dir.mkdir(parents=True, exist_ok=True)
+    session_state.models_dir.mkdir(parents=True, exist_ok=True)
+
+    # 2. Only clean RealityScan cache directory so old scans are never deleted
     clean_directory(CACHE_DIR)
     PROJECT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # 2. Reset internal state
+    # 3. Reset internal state
     session_state.expected_photos = req.expected_photos
     session_state.received_photos = 0
     session_state.is_scanning = True
@@ -133,8 +143,9 @@ async def session_start(req: StartSessionRequest):
 
     return {
         "status": "ok",
-        "message": "Directories cleaned and session initialized.",
-        "expected_photos": session_state.expected_photos
+        "message": f"Session scan_{session_id} initialized. All photos and models preserved.",
+        "expected_photos": session_state.expected_photos,
+        "session_id": session_id
     }
 
 
@@ -148,12 +159,12 @@ async def upload_image(request: Request, background_tasks: BackgroundTasks):
     if not body:
         raise HTTPException(status_code=400, detail="Empty image payload received")
 
-    PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+    session_state.photos_dir.mkdir(parents=True, exist_ok=True)
     session_state.received_photos += 1
     index = session_state.received_photos
 
-    # Format filename cleanly: photo_0001.jpg, photo_0002.jpg, etc.
-    filename = PHOTOS_DIR / f"photo_{index:04d}.jpg"
+    # Format filename cleanly inside session_photos_dir: photo_0001.jpg, etc.
+    filename = session_state.photos_dir / f"photo_{index:04d}.jpg"
     
     try:
         with open(filename, "wb") as f:

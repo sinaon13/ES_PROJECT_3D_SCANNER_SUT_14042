@@ -393,7 +393,10 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <!-- Crop Bar Info & Reset -->
     <div class="crop-bar">
       <span id="cropInfo">Crop: 70% x 70% (Center)</span>
-      <button type="button" onclick="resetCrop()">Reset Full Box</button>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" id="btnSwitchLens" onclick="switchCameraLens()" style="border-color: rgba(0, 240, 255, 0.4); color: var(--accent-cyan);">📷 Normal Lens</button>
+        <button type="button" onclick="resetCrop()">Reset Box</button>
+      </div>
     </div>
 
     <!-- Scan Parameters Card -->
@@ -476,21 +479,80 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
     // Crop box percentages (0.0 to 1.0 relative to video view)
     let cropBox = { left: 0.15, top: 0.15, width: 0.70, height: 0.70 };
 
-    async function initCamera() {
+    let videoDevices = [];
+    let currentDeviceIndex = 0;
+
+    async function initCamera(preferredDeviceId = null) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
+        if (!preferredDeviceId && videoDevices.length === 0) {
+          // Get temporary stream to unlock full device labels
+          const tempStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          videoDevices = devices.filter(d => d.kind === 'videoinput');
+          
+          // Filter for rear cameras (avoid front/selfie cameras)
+          let backCameras = videoDevices.filter(d => {
+            const label = d.label.toLowerCase();
+            return !label.includes('front') && !label.includes('user') && !label.includes('selfie');
+          });
+          if (backCameras.length === 0) backCameras = videoDevices;
+
+          // Prefer standard/main back lens over ultra-wide / 0.5x / macro
+          let mainCam = backCameras.find(d => {
+            const label = d.label.toLowerCase();
+            return !label.includes('ultra') && !label.includes('0.5') && !label.includes('macro');
+          });
+          if (!mainCam && backCameras.length > 0) mainCam = backCameras[0];
+          if (mainCam) {
+            preferredDeviceId = mainCam.deviceId;
+            currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === mainCam.deviceId);
+          }
+          tempStream.getTracks().forEach(t => t.stop());
+        }
+
+        const constraints = {
+          video: preferredDeviceId ? {
+            deviceId: { exact: preferredDeviceId },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          } : {
             facingMode: 'environment',
             width: { ideal: 1920 },
             height: { ideal: 1080 }
           },
           audio: false
-        });
+        };
+
+        if (videoStream) {
+          videoStream.getTracks().forEach(t => t.stop());
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
         videoStream = stream;
+        updateLensButtonText();
       } catch (err) {
         console.error("Camera access failed:", err);
         document.getElementById('logText').innerText = "Camera error: " + err.message;
+      }
+    }
+
+    function switchCameraLens() {
+      if (videoDevices.length <= 1) {
+        alert("Only one camera lens detected on this device.");
+        return;
+      }
+      currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+      initCamera(videoDevices[currentDeviceIndex].deviceId);
+    }
+
+    function updateLensButtonText() {
+      const btn = document.getElementById('btnSwitchLens');
+      if (btn && videoDevices.length > 0) {
+        const cam = videoDevices[currentDeviceIndex];
+        let shortLabel = cam ? cam.label : "Default";
+        if (shortLabel.length > 18) shortLabel = shortLabel.substring(0, 16) + "...";
+        btn.innerText = "📷 " + shortLabel;
       }
     }
 

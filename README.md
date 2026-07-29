@@ -40,29 +40,26 @@ The laptop backend uses Python with **FastAPI** & **Uvicorn**, managed via **`uv
    cd laptop_backend
    uv run server.py
    ```
-   *`uv` will automatically install dependencies and launch the server on port `8000` without needing a manual virtual environment.*
 
-### Automated RealityScan Paths
-The server uses the exact unchangeable paths:
-- **RealityScan Executable:** `E:\Epic Games\RealityScan_2.2\RealityScan.exe`
-- **Photos Directory:** `E:\3D\photos`
-- **Models Directory:** `E:\3D\models`
-- **Project File:** `E:\3D\RealityScanProject\AutoScan.rsc`
-- **Cache Directory:** `E:\3D\RealityScanCache`
+### Permanent Session Storage & Archiving
+Every scan session creates its own unique timestamped folder so **no models or images are ever overwritten or deleted**:
+- **Session Photos:** `E:\3D\photos\scan_<timestamp>\photo_0001.jpg`, etc.
+- **Session Models:** `E:\3D\models\scan_<timestamp>\texturedMesh.obj`
+
+### RealityScan Automation
+When all photos are received, the server executes RealityScan CLI in the background:
+```cmd
+E:\Epic Games\RealityScan_2.2\RealityScan.exe -newScene -addFolder "E:\3D\photos\scan_<timestamp>" -align -calculateNormalModel -calculateTexture -exportModel "Model 1" "E:\3D\models\scan_<timestamp>\texturedMesh.obj" -quit
+```
 
 ---
 
 ## 2. Flashing the ESP32-S3 Firmware
 
 1. Open `esp32_firmware/esp32_firmware.ino` in the Arduino IDE.
-2. In `esp32_firmware.ino`, configure your Wi-Fi Hotspot SSID and password:
-   ```cpp
-   const char* WIFI_SSID     = "YOUR_HOTSPOT_SSID";
-   const char* WIFI_PASSWORD = "YOUR_HOTSPOT_PASSWORD";
-   ```
+2. Configure your Wi-Fi Hotspot credentials at the top of the file.
 3. In **Tools**, select your board (`ESP32-S3 Dev Module` or `YD-ESP32-S3-N16R8`).
 4. **CRITICAL PSRAM SETTING**: In **Tools -> PSRAM**, select **`OPI PSRAM`** (or `Enabled`).
-   - This ensures the 2MB JPEG relay buffer is safely allocated in PSRAM without consuming DRAM.
 5. Upload the sketch.
 
 ---
@@ -70,14 +67,9 @@ The server uses the exact unchangeable paths:
 ## 3. How to Perform a Scan
 
 1. Connect your smartphone to the same **2.4GHz Wi-Fi Hotspot** (`192.168.137.x`).
-2. Open the ESP32's IP address in your mobile browser (e.g., `http://192.168.137.15`).
-3. **Crop & Configure:**
-   - Adjust the interactive crop box over the live camera preview to frame your turntable object.
-   - Set the rotation **Degree** (e.g. `10°`), **PWM Speed** (`0-255`), **Total Photos** (e.g. `36`), and **Stabilization Delay** (e.g. `1500 ms`).
-4. **Start Scan:**
-   - Press **START SCAN**.
-   - The ESP32 will notify the laptop to automatically clear old models, photos, and cache from `E:\3D`.
-   - The turntable will rotate by the specified degree, wait for stabilization, and command your phone to snap and upload the cropped photo.
-   - The ESP32 buffers the JPEG in PSRAM and relays it to `192.168.137.1:8000/upload_image`.
-5. **3D Reconstruction:**
-   - Once all photos are captured and relayed, the laptop backend automatically spawns **RealityScan 2.2 CLI** in the background to generate and export your `.fbx` model to `E:\3D\models`.
+2. Open the ESP32's IP address in your mobile browser.
+3. **Camera Lens Selection:** The web app automatically filters out ultra-wide lenses and selects your phone's primary back camera. You can also tap the **"📷 Normal Lens"** button on the crop bar at any time to cycle between available rear camera lenses.
+4. **Crop & Configure:**
+   - Drag and resize the crop box over the live camera preview. The crop coordinates align 1:1 with the captured frame.
+   - Set the rotation **Degree**, **PWM Speed**, **Total Photos**, and **Stabilization Delay**.
+5. **Start Scan:** Tap **START SCAN** to begin the automated turntable photogrammetry loop.
