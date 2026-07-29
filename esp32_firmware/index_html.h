@@ -395,6 +395,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <span id="cropInfo">Crop: 70% x 70% (Center)</span>
       <div style="display: flex; gap: 8px;">
         <button type="button" id="btnSwitchLens" onclick="switchCameraLens()" style="border-color: rgba(0, 240, 255, 0.4); color: var(--accent-cyan);">📷 Normal Lens</button>
+        <button type="button" id="btnFlash" onclick="toggleFlash()" style="border-color: rgba(255, 215, 0, 0.4); color: #ffd700;">⚡ Flash: OFF</button>
         <button type="button" onclick="resetCrop()">Reset Box</button>
       </div>
     </div>
@@ -537,10 +538,19 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       }
     }
 
+    let torchState = false;
+
     function switchCameraLens() {
       if (videoDevices.length <= 1) {
         alert("Only one camera lens detected on this device.");
         return;
+      }
+      torchState = false;
+      const flashBtn = document.getElementById('btnFlash');
+      if (flashBtn) {
+        flashBtn.innerText = "⚡ Flash: OFF";
+        flashBtn.style.background = "transparent";
+        flashBtn.style.color = "#ffd700";
       }
       currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
       initCamera(videoDevices[currentDeviceIndex].deviceId);
@@ -553,6 +563,28 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         let shortLabel = cam ? cam.label : "Default";
         if (shortLabel.length > 18) shortLabel = shortLabel.substring(0, 16) + "...";
         btn.innerText = "📷 " + shortLabel;
+      }
+    }
+
+    async function toggleFlash() {
+      if (!videoStream) return;
+      const track = videoStream.getVideoTracks()[0];
+      if (!track) return;
+      try {
+        torchState = !torchState;
+        await track.applyConstraints({
+          advanced: [{ torch: torchState }]
+        });
+        const btn = document.getElementById('btnFlash');
+        if (btn) {
+          btn.innerText = torchState ? "⚡ Flash: ON" : "⚡ Flash: OFF";
+          btn.style.background = torchState ? "rgba(255, 215, 0, 0.25)" : "transparent";
+          btn.style.color = torchState ? "#ffd700" : "var(--text-main)";
+        }
+      } catch (err) {
+        console.warn("Torch not supported on this device/lens:", err);
+        alert("Flash / Torch is not supported on the currently selected camera lens.");
+        torchState = false;
       }
     }
 
@@ -656,32 +688,40 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       isResizing = false;
     });
 
-    // Capture & Crop Image
-    function captureCroppedPhoto() {
-      return new Promise((resolve, reject) => {
-        if (!video.videoWidth || !video.videoHeight) {
-          return reject(new Error("Video not ready"));
+    // Capture & Crop Image (Up to 1MB high quality, compress only if >1MB)
+    async function captureCroppedPhoto() {
+      if (!video.videoWidth || !video.videoHeight) {
+        throw new Error("Video not ready");
+      }
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+
+      // Calculate actual pixel coords in source video stream
+      const srcX = Math.round(cropBox.left * vw);
+      const srcY = Math.round(cropBox.top * vh);
+      const srcW = Math.round(cropBox.width * vw);
+      const srcH = Math.round(cropBox.height * vh);
+
+      captureCanvas.width = srcW;
+      captureCanvas.height = srcH;
+
+      const ctx = captureCanvas.getContext('2d');
+      ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+      const qualities = [1.00, 0.95, 0.90, 0.85, 0.80, 0.75];
+      for (let q of qualities) {
+        const blob = await new Promise((resolve) => {
+          captureCanvas.toBlob(resolve, 'image/jpeg', q);
+        });
+        if (blob && blob.size <= 1000000) {
+          return blob;
         }
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
-
-        // Calculate actual pixel coords in source video stream
-        const srcX = Math.round(cropBox.left * vw);
-        const srcY = Math.round(cropBox.top * vh);
-        const srcW = Math.round(cropBox.width * vw);
-        const srcH = Math.round(cropBox.height * vh);
-
-        captureCanvas.width = srcW;
-        captureCanvas.height = srcH;
-
-        const ctx = captureCanvas.getContext('2d');
-        ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
-
-        // Convert to high-quality JPEG blob
+      }
+      return new Promise((resolve, reject) => {
         captureCanvas.toBlob((blob) => {
           if (blob) resolve(blob);
           else reject(new Error("Canvas blob error"));
-        }, 'image/jpeg', 0.88);
+        }, 'image/jpeg', 0.70);
       });
     }
 

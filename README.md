@@ -42,14 +42,15 @@ The laptop backend uses Python with **FastAPI** & **Uvicorn**, managed via **`uv
    ```
 
 ### Permanent Session Storage & Archiving
-Every scan session creates its own unique timestamped folder so **no models or images are ever overwritten or deleted**:
+Every scan session creates its own unique timestamped folder so **no projects, models, or images are ever overwritten or deleted**:
 - **Session Photos:** `E:\3D\photos\scan_<timestamp>\photo_0001.jpg`, etc.
 - **Session Models:** `E:\3D\models\scan_<timestamp>\texturedMesh.obj`
+- **Session Projects:** `E:\3D\RealityScanProject\scan_<timestamp>\scan_<timestamp>.rsc`
 
-### RealityScan Automation
-When all photos are received, the server executes RealityScan CLI in the background:
+### High Quality RealityScan Automation
+When all photos are received, the server executes RealityScan CLI with maximum reconstruction quality flags:
 ```cmd
-E:\Epic Games\RealityScan_2.2\RealityScan.exe -newScene -addFolder "E:\3D\photos\scan_<timestamp>" -align -calculateNormalModel -calculateTexture -exportModel "Model 1" "E:\3D\models\scan_<timestamp>\texturedMesh.obj" -quit
+E:\Epic Games\RealityScan_2.2\RealityScan.exe -newScene -addFolder "E:\3D\photos\scan_<timestamp>" -align -downscale=1 -calculateHighModel -calculateTexture -textureSize=4096 -saveProject "E:\3D\RealityScanProject\scan_<timestamp>\scan_<timestamp>.rsc" -exportModel "Model 1" "E:\3D\models\scan_<timestamp>\texturedMesh.obj" -save -quit
 ```
 
 ---
@@ -68,8 +69,12 @@ E:\Epic Games\RealityScan_2.2\RealityScan.exe -newScene -addFolder "E:\3D\photos
 
 1. Connect your smartphone to the same **2.4GHz Wi-Fi Hotspot** (`192.168.137.x`).
 2. Open the ESP32's IP address in your mobile browser.
-3. **Camera Lens Selection:** The web app automatically filters out ultra-wide lenses and selects your phone's primary back camera. You can also tap the **"📷 Normal Lens"** button on the crop bar at any time to cycle between available rear camera lenses.
-4. **Crop & Configure:**
-   - Drag and resize the crop box over the live camera preview. The crop coordinates align 1:1 with the captured frame.
+3. **Camera Features:**
+   - **Normal Camera Selection:** Automatically filters out ultra-wide lenses and selects your phone's primary back camera.
+   - **1-Tap Lens Switching:** Tap the **"📷 Normal Lens"** button on the crop bar at any time to cycle between available rear camera lenses.
+   - **Flash / Torch Toggle:** Tap the **"⚡ Flash: OFF"** button to turn on your smartphone's LED Flashlight for improved photogrammetry lighting.
+4. **High Quality Image Capture:** Photos are captured at up to **1 MB** high quality (compressed only if the raw JPEG exceeds 1 MB).
+5. **Crop & Configure:**
+   - Drag and resize the crop box over the live camera preview.
    - Set the rotation **Degree**, **PWM Speed**, **Total Photos**, and **Stabilization Delay**.
-5. **Start Scan:** Tap **START SCAN** to begin the automated turntable photogrammetry loop.
+6. **Start Scan:** Tap **START SCAN** to begin the automated turntable photogrammetry loop.
