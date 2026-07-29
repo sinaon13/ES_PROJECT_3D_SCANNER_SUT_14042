@@ -6,8 +6,8 @@
 // ==========================================
 // WIFI & HOST LAPTOP CONFIGURATION
 // ==========================================
-const char* WIFI_SSID     = "3D_SCANNER_HOST";     // SSID of your Windows 2.4GHz Hotspot
-const char* WIFI_PASSWORD = "your_hotspot_password";
+const char* WIFI_SSID     = "sina_on";     // SSID of your Windows 2.4GHz Hotspot
+const char* WIFI_PASSWORD = "Sina1384";
 const char* LAPTOP_URL    = "http://192.168.137.1:8000";
 
 // ==========================================
@@ -41,9 +41,9 @@ enum ScanState {
 ScanState currentState = STATE_IDLE;
 int currentPhotoIndex = 0;
 int totalPhotos = 36;
-int scanDegreeStep = 10;
+int scanDegreeStep = 2;
 int scanSpeedPWM = 200;
-unsigned long scanDelayMs = 1500;
+unsigned long scanDelayMs = 500;
 unsigned long stabilizationStartTime = 0;
 
 WebServer server(80);

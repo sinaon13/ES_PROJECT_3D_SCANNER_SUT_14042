@@ -75,17 +75,21 @@ def run_realityscan_pipeline():
         session_state.realityscan_running = False
         return
 
-    # Ensure parent directory for project file exists
-    PROJECT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    obj_path = str(MODELS_DIR / "texturedMesh.obj")
 
     cmd = [
         str(REALITYSCAN_EXE),
-        f"-project={PROJECT_FILE}",
-        f"-importFolder={PHOTOS_DIR}",
-        f"-exportFolder={MODELS_DIR}",
-        "-exportFormat=fbx",
-        "-runPipeline",
-        "-quitAfterExport"
+        "-newScene",
+        "-addFolder",
+        str(PHOTOS_DIR),
+        "-align",
+        "-calculateNormalModel",
+        "-calculateTexture",
+        "-exportModel",
+        "Model 1",
+        obj_path,
+        "-quit",
     ]
 
     logger.info(f"Launching RealityScan 2.2 CLI:\n{' '.join(cmd)}")

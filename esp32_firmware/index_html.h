@@ -403,7 +403,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <div class="param-item">
           <label for="inputDegree">Step Degree</label>
           <div class="input-wrapper">
-            <input type="number" id="inputDegree" value="10" min="1" max="360">
+            <input type="number" id="inputDegree" value="2" min="1" max="360">
             <span class="unit">°</span>
           </div>
         </div>
@@ -427,7 +427,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <div class="param-item">
           <label for="inputDelay">Stabilization Delay</label>
           <div class="input-wrapper">
-            <input type="number" id="inputDelay" value="1500" min="100" max="10000">
+            <input type="number" id="inputDelay" value="500" min="100" max="10000">
             <span class="unit">ms</span>
           </div>
         </div>
@@ -496,13 +496,45 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     initCamera();
 
+    function getDisplayedVideoRect() {
+      const cw = viewportCard.clientWidth;
+      const ch = viewportCard.clientHeight;
+      const vw = video.videoWidth || 1920;
+      const vh = video.videoHeight || 1080;
+
+      const containerRatio = cw / ch;
+      const videoRatio = vw / vh;
+
+      let rw, rh, rx, ry;
+
+      if (containerRatio > videoRatio) {
+        // Pillarboxed (black bars on left and right)
+        rh = ch;
+        rw = ch * videoRatio;
+        ry = 0;
+        rx = (cw - rw) / 2;
+      } else {
+        // Letterboxed (black bars on top and bottom)
+        rw = cw;
+        rh = cw / videoRatio;
+        rx = 0;
+        ry = (ch - rh) / 2;
+      }
+
+      return { rw, rh, rx, ry, vw, vh };
+    }
+
     function updateCropOverlay() {
-      const w = viewportCard.clientWidth;
-      const h = viewportCard.clientHeight;
-      cropOverlay.style.left = (cropBox.left * w) + "px";
-      cropOverlay.style.top = (cropBox.top * h) + "px";
-      cropOverlay.style.width = (cropBox.width * w) + "px";
-      cropOverlay.style.height = (cropBox.height * h) + "px";
+      const { rw, rh, rx, ry } = getDisplayedVideoRect();
+      const leftPx = rx + (cropBox.left * rw);
+      const topPx = ry + (cropBox.top * rh);
+      const widthPx = cropBox.width * rw;
+      const heightPx = cropBox.height * rh;
+
+      cropOverlay.style.left = leftPx + "px";
+      cropOverlay.style.top = topPx + "px";
+      cropOverlay.style.width = widthPx + "px";
+      cropOverlay.style.height = heightPx + "px";
       cropInfo.innerText = `Crop: ${Math.round(cropBox.width * 100)}% x ${Math.round(cropBox.height * 100)}%`;
     }
 
@@ -513,6 +545,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     window.addEventListener('resize', updateCropOverlay);
     setTimeout(updateCropOverlay, 500);
+    setInterval(updateCropOverlay, 1000); // keep in sync once camera metadata loads
 
     // Interactive crop drag & resize
     let isDragging = false;
@@ -527,32 +560,31 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       }
       startX = e.clientX;
       startY = e.clientY;
-      startLeft = cropBox.left * viewportCard.clientWidth;
-      startTop = cropBox.top * viewportCard.clientHeight;
-      startW = cropBox.width * viewportCard.clientWidth;
-      startH = cropBox.height * viewportCard.clientHeight;
+      startLeft = cropBox.left;
+      startTop = cropBox.top;
+      startW = cropBox.width;
+      startH = cropBox.height;
       cropOverlay.setPointerCapture(e.pointerId);
     });
 
     cropOverlay.addEventListener('pointermove', (e) => {
-      const w = viewportCard.clientWidth;
-      const h = viewportCard.clientHeight;
+      const { rw, rh } = getDisplayedVideoRect();
 
       if (isDragging) {
-        let dx = e.clientX - startX;
-        let dy = e.clientY - startY;
-        let nl = Math.max(0, Math.min(w - startW, startLeft + dx));
-        let nt = Math.max(0, Math.min(h - startH, startTop + dy));
-        cropBox.left = nl / w;
-        cropBox.top = nt / h;
+        let dx = (e.clientX - startX) / rw;
+        let dy = (e.clientY - startY) / rh;
+        let nl = Math.max(0, Math.min(1.0 - startW, startLeft + dx));
+        let nt = Math.max(0, Math.min(1.0 - startH, startTop + dy));
+        cropBox.left = nl;
+        cropBox.top = nt;
         updateCropOverlay();
       } else if (isResizing) {
-        let dx = e.clientX - startX;
-        let dy = e.clientY - startY;
-        let nw = Math.max(50, Math.min(w - startLeft, startW + dx));
-        let nh = Math.max(50, Math.min(h - startTop, startH + dy));
-        cropBox.width = nw / w;
-        cropBox.height = nh / h;
+        let dx = (e.clientX - startX) / rw;
+        let dy = (e.clientY - startY) / rh;
+        let nw = Math.max(0.1, Math.min(1.0 - startLeft, startW + dx));
+        let nh = Math.max(0.1, Math.min(1.0 - startTop, startH + dy));
+        cropBox.width = nw;
+        cropBox.height = nh;
         updateCropOverlay();
       }
     });
