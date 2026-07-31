@@ -86,7 +86,6 @@ def run_realityscan_pipeline():
     PROJECTS_DIR = Path(r"E:\3D\RealityScanProject")
     session_proj_dir = PROJECTS_DIR / f"scan_{session_state.session_id}"
     session_proj_dir.mkdir(parents=True, exist_ok=True)
-    project_path = str(session_proj_dir / f"scan_{session_state.session_id}.rsc")
 
     cmd = [
         str(REALITYSCAN_EXE),
@@ -94,17 +93,13 @@ def run_realityscan_pipeline():
         "-addFolder",
         str(session_state.photos_dir),
         "-align",
-        "-downscale=1",
+        "-selectMaximalComponent",
+        "-setReconstructionRegionAuto",
         "-calculateHighModel",
         "-calculateTexture",
-        "-textureSize=4096",
-        "-saveProject",
-        project_path,
         "-exportModel",
         "Model 1",
         obj_path,
-        "-save",
-        "-quit"
     ]
 
     logger.info(f"Launching RealityScan 2.2 CLI:\n{' '.join(cmd)}")
